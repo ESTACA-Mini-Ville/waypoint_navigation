@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""Node that runs the RouteManager controller.
+This node subscribes to /destination (std_msgs/Int32) and /amcl_pose and 
+publishes /planned_path. It is separated from the pure_pursuit node, which only
+follows the published path.
+"""
+
+import rospy
+from waypoint_navigation.route_manager import RouteManager
+
+
+def main():
+    rospy.init_node("route_planner")
+
+    follower = RouteManager()
+    follower.start()
+
+    rospy.loginfo("route_planner node started. Listening to /destination and /amcl_pose.")
+    rospy.spin()
+
+
+if __name__ == "__main__":
+    main()

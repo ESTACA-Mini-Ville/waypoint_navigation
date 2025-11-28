@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Launch the route planner and pure pursuit follower nodes -->
+  <node pkg="waypoint_navigation" type="route_planner" name="route_planner" output="screen" />
+  <node pkg="waypoint_navigation" type="pure_pursuit" name="pure_pursuit" output="screen" />
+</launch>

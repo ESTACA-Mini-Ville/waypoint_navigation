@@ -1,0 +1,26 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""Node that runs the PurePursuitFollower controller.
+
+This node subscribes to /planned_path (nav_msgs/Path) and /amcl_pose and
+publishes /cmd_vel. It is separated from the route_planner node, which only
+computes/publishes planned paths.
+"""
+
+import rospy
+from waypoint_navigation.pure_pursuit_follower import PurePursuitFollower
+
+
+def main():
+    rospy.init_node("pure_pursuit")
+
+    follower = PurePursuitFollower()
+    follower.start()
+
+    rospy.loginfo("pure_pursuit node started. Listening to /planned_path and /amcl_pose.")
+    rospy.spin()
+
+
+if __name__ == "__main__":
+    main()
