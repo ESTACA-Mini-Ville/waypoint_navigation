@@ -118,8 +118,12 @@ original_data = [
 {"id": 116, "x": 4.500, "y": 2.200, "links": [88]}
  ]
 
+IMAGE_WIDTH_M = 5.63
+IMAGE_HEIGHT_M = 6.85
+HALF_W = IMAGE_WIDTH_M / 2
+HALF_H = IMAGE_HEIGHT_M / 2 - 0.3
+
 data = [
-    {"id": node["id"], "x": -node["x"], "y": -node["y"], "links": node["links"]}
+    {"id": node["id"], "x": node["y"] - HALF_W, "y": -node["x"] + HALF_H, "links": node["links"]}
     for node in original_data
 ]
-
