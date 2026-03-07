@@ -5,6 +5,7 @@ import rospy
 import math
 from geometry_msgs.msg import Twist, PoseWithCovarianceStamped
 from nav_msgs.msg import Path
+from std_msgs.msg import Bool
 from tf.transformations import euler_from_quaternion
 
 class PurePursuitFollower:
@@ -15,11 +16,13 @@ class PurePursuitFollower:
         self.cmd_pub = None
         self.path_sub = None
         self.pose_sub = None
-
+        self.stop_sub = None
+        
         self.path = []
         self.pose = None
         self.current_index = 0
-
+        self.is_stopped_by_traffic = False
+        
         self.lookahead_distance = 0.3
         self.linear_speed = 0.3
         self.angular_gain = 0.7
@@ -35,32 +38,13 @@ class PurePursuitFollower:
         self.cmd_pub = rospy.Publisher("/cmd_vel", Twist, queue_size=1)
         self.path_sub = rospy.Subscriber("/planned_path", Path, self.path_callback)
         self.pose_sub = rospy.Subscriber("/amcl_pose", PoseWithCovarianceStamped, self.pose_callback)
+        self.stop_sub = rospy.Subscriber("/traffic_stop", Bool, self.traffic_callback)
+        
         self._started = True
         rospy.loginfo("🚗 Pure Pursuit path follower started (in-process).")
 
-    def stop(self):
-        """Stop the follower: unregister subscribers and publish zero velocity."""
-        try:
-            if self.path_sub is not None:
-                self.path_sub.unregister()
-                self.path_sub = None
-            if self.pose_sub is not None:
-                self.pose_sub.unregister()
-                self.pose_sub = None
-        except Exception:
-            pass
-
-        if self.cmd_pub is not None:
-            try:
-                self.cmd_pub.publish(Twist())
-            except Exception:
-                pass
-        rospy.loginfo("� Pure Pursuit follower stopped.")
-
-    def path_callback(self, msg):
-        self.path = [(pose.pose.position.x, pose.pose.position.y) for pose in msg.poses]
-        self.current_index = 0
-        rospy.loginfo("📥 Received path with %d points", len(self.path))
+    def traffic_callback(self, msg):
+        self.is_stopped_by_traffic = msg.data
 
     def pose_callback(self, msg):
         self.pose = msg.pose.pose
@@ -68,55 +52,53 @@ class PurePursuitFollower:
 
     def follow_path(self):
         if not self.path or not self.pose:
-            rospy.logwarn("❌ Path or pose not ready.")
             return
+
+        # --- SÉCURITÉ FEU DE CIRCULATION ---
+        if self.is_stopped_by_traffic:
+            self.cmd_pub.publish(Twist()) # Force l'arrêt
+            return
+        # ------------------------------------
 
         x = self.pose.position.x
         y = self.pose.position.y
         (_, _, yaw) = euler_from_quaternion([
-            self.pose.orientation.x,
-            self.pose.orientation.y,
-            self.pose.orientation.z,
-            self.pose.orientation.w
+            self.pose.orientation.x, self.pose.orientation.y,
+            self.pose.orientation.z, self.pose.orientation.w
         ])
 
         target = None
         for i in range(self.current_index, len(self.path)):
             px, py = self.path[i]
-            dist = math.hypot(px - x, py - y)
-            if dist >= self.lookahead_distance:
+            if math.hypot(px - x, py - y) >= self.lookahead_distance:
                 target = (px, py)
                 self.current_index = i
                 break
 
         if not target:
             final_x, final_y = self.path[-1]
-            final_dist = math.hypot(final_x - x, final_y - y)
-            if final_dist < 0.1:
-                rospy.loginfo("✅ Close enough to final goal. Stopping.")
+            if math.hypot(final_x - x, final_y - y) < 0.1:
                 self.cmd_pub.publish(Twist())
-            else:
-                rospy.logwarn("⚠️ No valid lookahead point, but not at goal. Holding.")
             return
 
         tx, ty = target
-        angle_to_target = math.atan2(ty - y, tx - x)
-        angle_diff = self.normalize_angle(angle_to_target - yaw)
-
+        angle_diff = self.normalize_angle(math.atan2(ty - y, tx - x) - yaw)
+        
         cmd = Twist()
         cmd.linear.x = self.linear_speed
-        cmd.angular.z = self.angular_gain * angle_diff
-        cmd.angular.z = max(-self.max_angular_speed, min(cmd.angular.z, self.max_angular_speed))
-
-        rospy.loginfo("🔄 Robot at: x=%.2f y=%.2f yaw=%.2f", x, y, yaw)
-        rospy.loginfo("🎯 Target: x=%.2f y=%.2f | Δθ=%.2f", tx, ty, angle_diff)
-        rospy.loginfo("🚀 cmd_vel: linear=%.2f angular=%.2f", cmd.linear.x, cmd.angular.z)
+        cmd.angular.z = max(-self.max_angular_speed, min(self.angular_gain * angle_diff, self.max_angular_speed))
         self.cmd_pub.publish(cmd)
 
     def normalize_angle(self, angle):
-        while angle > math.pi:
-            angle -= 2 * math.pi
-        while angle < -math.pi:
-            angle += 2 * math.pi
+        while angle > math.pi: angle -= 2 * math.pi
+        while angle < -math.pi: angle += 2 * math.pi
         return angle
+
+    def path_callback(self, msg):
+        self.path = [(p.pose.position.x, p.pose.position.y) for p in msg.poses]
+        self.current_index = 0
+
+    def stop(self):
+        if self.stop_sub: self.stop_sub.unregister()
+        if self.cmd_pub: self.cmd_pub.publish(Twist())
 
