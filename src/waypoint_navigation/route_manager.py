@@ -15,7 +15,7 @@ TRAFFIC_LIGHTS = {
     "FEU_3": {"x": 2.8, "y": -2.0},
     "FEU_4": {"x": 0.0, "y": 0.0},
 }
-ZONE_THRESHOLD = 0.5 # Rayon de la zone qui sera ajoutée et retiré a x et y pour définir la zone d'arrêt
+ZONE_THRESHOLD = 0.5 # Rayon de la zone +-X, +-Y en mètres
 UDP_PORT = 5005      # Port UDP à adapter
 
 class RouteManager:
