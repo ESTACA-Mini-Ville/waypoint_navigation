@@ -1,7 +1,5 @@
 import rospy
 import math
-import socket
-import threading
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from std_msgs.msg import Int32
 from waypoint_navigation.graph_data import data
@@ -16,8 +14,6 @@ TRAFFIC_LIGHTS = {
     "ZONE_4_ROUTE_B": {"x": 6.42, "y": 1.55, "route": "B"},
 }
 ZONE_THRESHOLD = 0.5 # Rayon de la zone +-X, +-Y
-UDP_PORT = 5005      # Port UDP 
-
 class RouteManager:
     def __init__(self):
         """Route manager handles incoming destination requests and
@@ -32,7 +28,7 @@ class RouteManager:
         self.path_planner = None
         self.started = False
         self.current_traffic_state = 3  # Par défaut : ALL_RED (3)
-        self.lock = threading.Lock()
+        self.stop_pub = None
 
     def start(self):
         """Initialize ROS publishers/subscribers. Assumes rospy.init_node() has
@@ -50,24 +46,14 @@ class RouteManager:
         rospy.Subscriber("/amcl_pose", PoseWithCovarianceStamped, self.pose_callback)
         
         # Lancement de l'écoute UDP dans un thread séparé
-        threading.Thread(target=self.udp_listener, daemon=True).start()
+        rospy.Subscriber("/traffic_lights_status", rospy.AnyMsg, self.traffic_callback)
         
         rospy.loginfo("Destination Manager started.")
         self.started = True
         
-       def udp_listener(self):
-        """Écoute les états envoyés par le TrafficLightManager."""
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.bind(("0.0.0.0", UDP_PORT))
-        while not rospy.is_shutdown():
-            try:
-                data_raw, _ = sock.recvfrom(1024)
-                # On attend l'entier correspondant à l'IntEnum (1 à 5)
-                state = int(data_raw.decode().strip())
-                with self.lock:
-                    self.current_traffic_state = state
-            except Exception as e:
-                rospy.logerr("UDP Error: %s", str(e))
+       def traffic_callback(self, msg):
+        """Récupère l'état actuel depuis le topic ROS."""
+        self.current_traffic_state = msg.current_state
                     
         def pose_callback(self, msg):
             """Met à jour la pose et vérifie immédiatement les feux."""
