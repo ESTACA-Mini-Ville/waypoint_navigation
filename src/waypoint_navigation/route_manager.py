@@ -10,13 +10,13 @@ from waypoint_navigation.path_planner import PathPlanner
 # --- CONFIGURATION DES FEUX ---
 # Remplace x, y par les coordonnées réelles des feux
 TRAFFIC_LIGHTS = {
-    "FEU_1": {"x": 1.2, "y": 3.4},
-    "FEU_2": {"x": -0.5, "y": 1.1},
-    "FEU_3": {"x": 2.8, "y": -2.0},
-    "FEU_4": {"x": 0.0, "y": 0.0},
+    "ZONE_1_ROUTE_A": {"x": 1.55, "y": 0.37, "route": "A"},
+    "ZONE_2_ROUTE_A": {"x": 5.25, "y": 5.22, "route": "A"},
+    "ZONE_3_ROUTE_B": {"x": 0.37, "y": 4.05, "route": "B"},
+    "ZONE_4_ROUTE_B": {"x": 6.42, "y": 1.55, "route": "B"},
 }
-ZONE_THRESHOLD = 0.5 # Rayon de la zone +-X, +-Y en mètres
-UDP_PORT = 5005      # Port UDP à adapter
+ZONE_THRESHOLD = 0.5 # Rayon de la zone +-X, +-Y
+UDP_PORT = 5005      # Port UDP 
 
 class RouteManager:
     def __init__(self):
@@ -31,7 +31,7 @@ class RouteManager:
         self.robot_pose = None
         self.path_planner = None
         self.started = False
-        self.light_states = {} # Stocke l'état (ex: {"FEU_1": "RED"})
+        self.current_traffic_state = 3  # Par défaut : ALL_RED (3)
         self.lock = threading.Lock()
 
     def start(self):
@@ -55,42 +55,53 @@ class RouteManager:
         rospy.loginfo("Destination Manager started.")
         self.started = True
         
-        def udp_listener(self):
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.bind(("0.0.0.0", UDP_PORT))
-            while not rospy.is_shutdown():
-                try:
-                    data_raw, _ = sock.recvfrom(1024)
-                    # Format attendu: "FEU_1:RED"
-                    msg = data_raw.decode().strip().split(":")
-                    if len(msg) == 2:
-                        with self.lock:
-                            self.light_states[msg[0]] = msg[1]
-                except: pass
+       def udp_listener(self):
+        """Écoute les états envoyés par le TrafficLightManager."""
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.bind(("0.0.0.0", UDP_PORT))
+        while not rospy.is_shutdown():
+            try:
+                data_raw, _ = sock.recvfrom(1024)
+                # On attend l'entier correspondant à l'IntEnum (1 à 5)
+                state = int(data_raw.decode().strip())
+                with self.lock:
+                    self.current_traffic_state = state
+            except Exception as e:
+                rospy.logerr("UDP Error: %s", str(e))
                     
-    def pose_callback(self, msg):
-        """Update the stored robot pose from AMCL."""
-        self.robot_pose = msg.pose.pose
-        self.check_traffic_logic() # On vérifie à chaque update de pose
-        
-    def check_traffic_logic(self):
-            if not self.robot_pose: return
-            
+        def pose_callback(self, msg):
+            """Met à jour la pose et vérifie immédiatement les feux."""
+            self.robot_pose = msg.pose.pose
+            self.check_traffic_conditions()
+    
+        def check_traffic_conditions(self):
+            """Logique de décision d'arrêt."""
+            if not self.robot_pose:
+                return
+    
             rx = self.robot_pose.position.x
             ry = self.robot_pose.position.y
             must_stop = False
     
-            for name, pos in TRAFFIC_LIGHTS.items():
-                # Vérification de la zone (+-X, +-Y)
-                if abs(rx - pos["x"]) < ZONE_THRESHOLD and abs(ry - pos["y"]) < ZONE_THRESHOLD:
-                    with self.lock:
-                        state = self.light_states.get(name, "GREEN")
-                        if state == "RED":
-                            must_stop = True
-                            rospy.logwarn_throttle(2, f"ARRÊT: {name} est ROUGE")
-                            break
-        
-        self.stop_pub.publish(Bool(must_stop))
+            with self.lock:
+                state = self.current_traffic_state
+    
+            for name, zone in TRAFFIC_ZONES.items():
+                # Vérification de la zone de proximité
+                if abs(rx - zone["x"]) < ZONE_THRESHOLD and abs(ry - zone["y"]) < ZONE_THRESHOLD:
+                    # Logique basée sur ton TrafficLightState :
+                    # Route A : S'arrête si l'état n'est pas A_GREEN (1)
+                    if zone["route"] == "A" and state != 1:
+                        must_stop = True
+                    # Route B : S'arrête si l'état n'est pas B_GREEN (4)
+                    elif zone["route"] == "B" and state != 4:
+                        must_stop = True
+                    
+                    if must_stop:
+                        rospy.logwarn_throttle(2, "FEU ROUGE détecté dans %s (Etat: %d)", name, state)
+                    break
+    
+            self.stop_pub.publish(Bool(must_stop))
 
 
     def find_closest_waypoint(self):
@@ -117,30 +128,8 @@ class RouteManager:
         rospy.loginfo("Closest departure waypoint found: ID %d", closest_id)
         return closest_id
 
-    def destination_callback(self, msg):
-        """Handle a new destination request: plan a path and start the follower."""
-
-        destination_id = msg.data
-        rospy.loginfo("New destination received: ID %d", destination_id)
-
-        # Find the closest waypoint to use as start
-        start_id = self.find_closest_waypoint()
-        if start_id is None or start_id == -1:
-            return
-
-        if start_id == destination_id:
-            rospy.loginfo("Robot is already at the destination.")
-            return
-
-        # Compute path using the planner
-        try:
-            rospy.loginfo("Starting path planner from ID %d to ID %d...", start_id, destination_id)
-            success = self.path_planner.plan(start_id, destination_id)
-            if not success:
-                rospy.logerr("Path planner failed to generate a path.")
-                return
-        except Exception as e:
-            rospy.logerr("Critical error calling PathPlanner.plan: %s", str(e))
-            return
-
-
+       def destination_callback(self, msg):
+            destination_id = msg.data
+            start_id = self.find_closest_waypoint()
+            if start_id is not None and start_id != -1 and start_id != destination_id:
+                self.path_planner.plan(start_id, destination_id)
