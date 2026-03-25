@@ -11,12 +11,12 @@ import struct
 # --- CONFIGURATION DES FEUX ---
 # Remplace x, y par les coordonnées réelles des feux
 TRAFFIC_LIGHTS = {
-    "ZONE_1_ROUTE_A": {"x": 1.55, "y": 0.37, "route": "A"},
-    "ZONE_2_ROUTE_A": {"x": 5.25, "y": 5.22, "route": "A"},
-    "ZONE_3_ROUTE_B": {"x": 0.37, "y": 4.05, "route": "B"},
-    "ZONE_4_ROUTE_B": {"x": 6.42, "y": 1.55, "route": "B"},
+    "ZONE_1_ROUTE_A": {"x": -0.74, "y": -1, "route": "A"},
+    "ZONE_2_ROUTE_A": {"x": -0.3, "y": -1.93, "route": "A"},
+    "ZONE_3_ROUTE_B": {"x": -1.16, "y": -1.81, "route": "B"},
+    "ZONE_4_ROUTE_B": {"x": 0, "y": -1.4, "route": "B"},
 }
-ZONE_THRESHOLD = 0.5 # Rayon de la zone +-X, +-Y
+ZONE_THRESHOLD = 0.2 # Rayon de la zone +-X, +-Y
 class RouteManager:
     def __init__(self):
         """Route manager handles incoming destination requests and
