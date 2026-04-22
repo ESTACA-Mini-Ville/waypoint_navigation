@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import rospy
 import math
 from geometry_msgs.msg import PoseWithCovarianceStamped
@@ -9,12 +10,12 @@ import threading
 import struct
 
 # --- CONFIGURATION DES FEUX ---
-# Remplace x, y par les coordonnées réelles des feux
+# Remplace x, y par les coordonness reelles des feux
 TRAFFIC_LIGHTS = {
-    "ZONE_1_ROUTE_A": {"x": -0.74, "y": -1, "route": "A"},
-    "ZONE_2_ROUTE_A": {"x": -0.3, "y": -1.93, "route": "A"},
-    "ZONE_3_ROUTE_B": {"x": -1.16, "y": -1.81, "route": "B"},
-    "ZONE_4_ROUTE_B": {"x": 0, "y": -1.4, "route": "B"},
+    "ZONE_1_ROUTE_A": {"x": -0.82, "y": -0.9, "route": "A"}, # Haut => bas
+    "ZONE_2_ROUTE_A": {"x": -0.7, "y": -2.43, "route": "A"}, # Bas => haut
+    "ZONE_3_ROUTE_B": {"x": -1.37, "y": -1.39, "route": "B"}, # gauche => droite
+    "ZONE_4_ROUTE_B": {"x": 0.26, "y": -1.28, "route": "B"}, # Droite => gauche 
 }
 ZONE_THRESHOLD = 0.2 # Rayon de la zone +-X, +-Y
 class RouteManager:
