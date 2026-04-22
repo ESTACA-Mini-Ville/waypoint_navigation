@@ -45,6 +45,8 @@ class PurePursuitFollower:
 
     def traffic_callback(self, msg):
         self.is_stopped_by_traffic = msg.data
+        # Déclencher immédiatement une mise à jour de la commande (arrêt ou démarrage)
+        self.follow_path()
 
     def pose_callback(self, msg):
         self.pose = msg.pose.pose

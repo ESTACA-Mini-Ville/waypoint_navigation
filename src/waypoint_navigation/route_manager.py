@@ -6,6 +6,11 @@ from std_msgs.msg import Int32, Bool
 from rospy.msg import AnyMsg
 from waypoint_navigation.graph_data import data
 from waypoint_navigation.path_planner import PathPlanner
+try:
+    from ros_dds_bridge.msg import TrafficLightsStatus
+except ImportError:
+    # Fallback if the package is not found during static analysis
+    TrafficLightsStatus = AnyMsg
 import threading
 import struct
 
@@ -51,8 +56,8 @@ class RouteManager:
         rospy.Subscriber("/destination", Int32, self.destination_callback)
         rospy.Subscriber("/amcl_pose", PoseWithCovarianceStamped, self.pose_callback)
         
-        # Ecoute du statut des feux
-        rospy.Subscriber("/traffic_lights_status", AnyMsg, self.traffic_callback)
+        # Ecoute du statut des feux avec le type correct
+        rospy.Subscriber("/traffic_lights_status", TrafficLightsStatus, self.traffic_callback)
         
         rospy.loginfo("Destination Manager started.")
         self.started = True
@@ -60,36 +65,23 @@ class RouteManager:
     def traffic_callback(self, msg):
         """Récupère l'état actuel et le schedule depuis le topic ROS."""
         try:
-            state = 3
-            schedule = []
-            
-            if hasattr(msg, '_connection_header') and hasattr(msg, '_buff'):
-                type_str = msg._connection_header.get('type')
-                import roslib.message
-                msg_class = roslib.message.get_message_class(type_str) if type_str else None
-                
-                if msg_class:
-                    parsed_msg = msg_class().deserialize(msg._buff)
-                    state = getattr(parsed_msg, 'current_state', 3)
-                    schedule = getattr(parsed_msg, 'schedule', [])
-                else:
-                    # Fallback struct parsing if Python message not generated
-                    buff = msg._buff
-                    if len(buff) >= 16:
-                        state, timestamp, sched_len = struct.unpack('<idI', buff[:16])
-                        offset = 16
-                        for i in range(sched_len):
-                            if offset + 20 > len(buff): break
-                            st, start_time, duration = struct.unpack('<idd', buff[offset:offset+20])
-                            schedule.append({'state': st, 'start_time': start_time, 'duration': duration})
-                            offset += 20
+            # Si on utilise AnyMsg (fallback), on ne peut pas accéder aux attributs directement
+            if hasattr(msg, '_buff'):
+                # On réutilise une partie de l'ancienne logique de parsing si nécessaire, 
+                # mais le but est d'utiliser le type TrafficLightsStatus
+                state = 3
+                if len(msg._buff) >= 4:
+                    state = struct.unpack('<i', msg._buff[:4])[0]
             else:
                 state = getattr(msg, 'current_state', 3)
-                schedule = getattr(msg, 'schedule', [])
                 
             with self.lock:
                 self.current_traffic_state = state
-                self.current_schedule = schedule
+                # On peut aussi récupérer le schedule si besoin
+                self.current_schedule = getattr(msg, 'schedule', [])
+                
+            # Re-vérifier les conditions dès que le statut change
+            self.check_traffic_conditions()
                 
         except Exception as e:
             rospy.logwarn_throttle(2, "Erreur de parsing traffic status: %s", str(e))
