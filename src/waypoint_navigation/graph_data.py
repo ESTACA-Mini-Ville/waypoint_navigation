@@ -120,8 +120,8 @@ original_data = [
 
 IMAGE_WIDTH_M = 5.63
 IMAGE_HEIGHT_M = 6.85
-HALF_W = IMAGE_WIDTH_M / 2
-HALF_H = IMAGE_HEIGHT_M / 2 - 0.3
+HALF_W = IMAGE_WIDTH_M / 2 - 0.15
+HALF_H = IMAGE_HEIGHT_M / 2 - 0.2
 
 data = [
     {"id": node["id"], "x": node["y"] - HALF_W, "y": -node["x"] + HALF_H, "links": node["links"]}
