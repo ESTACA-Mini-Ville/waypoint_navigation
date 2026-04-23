@@ -22,7 +22,17 @@ class PathPlanner:
         # Nothing that requires rospy.init_node is done at construction time.
         # Graph is built on demand in plan() so updates to graph_data are
         # picked up without restarting this object.
-        pass
+        self.path_pub = None
+
+    def clear(self):
+        """Clear the current planned path by publishing an empty Path message."""
+        if self.path_pub is None:
+            self.path_pub = rospy.Publisher("/planned_path", Path, queue_size=1, latch=True)
+        
+        path_msg = Path()
+        path_msg.header.frame_id = "map"
+        self.path_pub.publish(path_msg)
+        rospy.loginfo("Planned path cleared.")
 
     def build_graph(self):
         """Build a directed graph from `data` where edge weights are Euclidean
@@ -68,7 +78,8 @@ class PathPlanner:
     def publish_path(self, path_table):
         """Publish a nav_msgs/Path to /planned_path using the (x,y,theta)
         tuples in path_table."""
-        pub = rospy.Publisher("/planned_path", Path, queue_size=1, latch=True)
+        if self.path_pub is None:
+            self.path_pub = rospy.Publisher("/planned_path", Path, queue_size=1, latch=True)
         path_msg = Path()
         path_msg.header.frame_id = "map"
 
@@ -85,7 +96,7 @@ class PathPlanner:
 
         # Give ROS time to establish connections before publishing
         rospy.sleep(0.5)
-        pub.publish(path_msg)
+        self.path_pub.publish(path_msg)
         rospy.loginfo("Path published to /planned_path.")
 
     def plan(self, start, goal):

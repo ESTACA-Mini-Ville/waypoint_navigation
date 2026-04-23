@@ -17,6 +17,7 @@ class PurePursuitFollower:
         self.path_sub = None
         self.pose_sub = None
         self.stop_sub = None
+        self.reached_pub = None
         
         self.path = []
         self.pose = None
@@ -39,6 +40,7 @@ class PurePursuitFollower:
         self.path_sub = rospy.Subscriber("/planned_path", Path, self.path_callback)
         self.pose_sub = rospy.Subscriber("/amcl_pose", PoseWithCovarianceStamped, self.pose_callback)
         self.stop_sub = rospy.Subscriber("/traffic_stop", Bool, self.traffic_callback)
+        self.reached_pub = rospy.Publisher("/destination_reached", Bool, queue_size=1, latch=True)
         
         self._started = True
         rospy.loginfo("🚗 Pure Pursuit path follower started (in-process).")
@@ -78,10 +80,21 @@ class PurePursuitFollower:
                 break
 
         if not target:
+            if not self.path:
+                return
+            
             final_x, final_y = self.path[-1]
-            if math.hypot(final_x - x, final_y - y) < 0.1:
+            dist_to_goal = math.hypot(final_x - x, final_y - y)
+            
+            if dist_to_goal < 0.1:
                 self.cmd_pub.publish(Twist())
-            return
+                rospy.loginfo("✅ Destination reached! Stopping and clearing path.")
+                self.path = []
+                self.reached_pub.publish(Bool(True))
+                return
+            else:
+                # Still within lookahead but not at goal yet, target the final point
+                target = (final_x, final_y)
 
         tx, ty = target
         angle_diff = self.normalize_angle(math.atan2(ty - y, tx - x) - yaw)
@@ -99,6 +112,8 @@ class PurePursuitFollower:
     def path_callback(self, msg):
         self.path = [(p.pose.position.x, p.pose.position.y) for p in msg.poses]
         self.current_index = 0
+        if self.path and self.reached_pub:
+            self.reached_pub.publish(Bool(False))
 
     def stop(self):
         if self.stop_sub: self.stop_sub.unregister()

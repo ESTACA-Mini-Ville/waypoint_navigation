@@ -56,8 +56,9 @@ class RouteManager:
         rospy.Subscriber("/destination", Int32, self.destination_callback)
         rospy.Subscriber("/amcl_pose", PoseWithCovarianceStamped, self.pose_callback)
         
-        # Ecoute du statut des feux avec le type correct
         rospy.Subscriber("/traffic_lights_status", TrafficLightsStatus, self.traffic_callback)
+        rospy.Subscriber("/destination_reached", Bool, self.reached_callback)
+        rospy.Subscriber("/cancel_goal", Bool, self.cancel_callback)
         
         rospy.loginfo("Destination Manager started.")
         self.started = True
@@ -85,6 +86,20 @@ class RouteManager:
                 
         except Exception as e:
             rospy.logwarn_throttle(2, "Erreur de parsing traffic status: %s", str(e))
+
+    def reached_callback(self, msg):
+        """Called when the follower notifies that the goal is reached."""
+        if msg.data:
+            rospy.loginfo("Goal reached reached signal received. Cancelling/Clearing current path.")
+            if self.path_planner:
+                self.path_planner.clear()
+
+    def cancel_callback(self, msg):
+        """Allows external systems to cancel the current navigation goal."""
+        if msg.data:
+            rospy.loginfo("Navigation cancel requested.")
+            if self.path_planner:
+                self.path_planner.clear()
                     
     def pose_callback(self, msg):
         """Met à jour la pose et vérifie immédiatement les feux."""
