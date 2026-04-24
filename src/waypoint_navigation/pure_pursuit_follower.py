@@ -114,6 +114,9 @@ class PurePursuitFollower:
         self.current_index = 0
         if self.path and self.reached_pub:
             self.reached_pub.publish(Bool(False))
+        
+        # Déclencher immédiatement le suivi si on a déjà une pose
+        self.follow_path()
 
     def stop(self):
         if self.stop_sub: self.stop_sub.unregister()
